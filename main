@@ -1,36 +1,68 @@
-map = window.create(term.native(),1,1,27,19)
 
-turtleName = "Turtle"
-mapFile = "gladiusMap"
+
+for i,v in pairs(peripheral.getNames()) do -- Finds connected modems and then opens them
+  if peripheral.getType(v) == "modem" then
+  	rednet.open(v)
+  end
+end
+
+turtleName = read()
+mapFile = ".gladius/map"
+positions = {}
 tMap = {}
-if fs.exists(turtleName) then
-  local file = fs.open(turtleName,"r")
-  local save = textutils.unserialize(file.readAll)
-  curX, curY = save.x, save.y
-  curLayer = save.layer
+
+if fs.exists(mapFile) then
+  local file = fs.open(".gladius/map","r")
+  local data = textutils.unserialize(file.readAll())
+  tMap = data
+  file.close()
+end
+
+if fs.exists(".gladius/Drones/"..turtleName) then
+  local file = fs.open(".gladius/Drones/"..turtleName,"r")
+  local save = textutils.unserialize(file.readAll())
+  positions = save
   file.close()
 else
-  curX, curY = 0,0
-  curLayer = 0
+  positions.curX, positions.curY = 0,0
+  positions.curLayer = 0
 end
+
+map = window.create(term.native(),1,1,27,19)
+term.setBackgroundColor(colors.lightGray)
+term.clear()
 
 function newBlock(X,Y,Color,Layer)
-  local template = {
-  	x = X,
-  	y = Y,
-  	color = Color,
-  	layer = Layer}
-  table.insert(tMap,template)
+  for i,v in pairs(tMap) do
+    if v.x == X and v.y == Y and v.layer == Layer and v.color ~= Color then
+      local template = {
+        x = X,
+        y = Y,
+        color = Color,
+        layer = Layer}
+        table.insert(tMap,template)
+    elseif v.x == X and v.y == Y and v.layer == Layer and v.color == Color then
+      marked = true
+    end
+  end
+  if not marked then
+    local template = {
+      x = X,
+      y = Y,
+      color = Color,
+      layer = Layer}
+    table.insert(tMap,template)
+  end
 end
-
-function redraw()
+ 
+function redrawMap()
   map.setBackgroundColor(colors.black)
   map.clear()
   term.redirect(map)
   for i,v in pairs(tMap) do
-  	if v.x - curX > -14 and v.x - curX < 28 and v.y - curY > -10 and v.y - curY < 20 then
-  	  paintutils.drawPixel(v.x - curX, v.y - curY, v.color)
-  	end
+        if v.x - positions.curX > -14 and v.x - positions.curX < 28 and v.y - positions.curY > -10 and v.y - positions.curY < 20 and positions.curLayer == v.layer then
+          paintutils.drawPixel(v.x - positions.curX, v.y - positions.curY, v.color)
+        end
   end
   term.setCursorPos(14,10)
   term.setBackgroundColor(colors.yellow)
@@ -38,37 +70,40 @@ function redraw()
   term.write("@")
   term.redirect(term.native())
 end
-
+ 
 function turtleError()
   map.setBackgroundColor(colors.blue)
   map.clear()
-  local text = "Turtle not linked"
+  local text = "Turtle disconnected"
   local w,h = map.getSize()
-  map.setCursorPos(math.floor(w / 2 - text:len() / 2 + .5), math.floor(h / 2 + .5))
+  map.setCursorPos(math.floor(w / 2 - text:len() / 2 + .5), math.floor(h / 2 + .5)) -- Positions text in the middle of the map
   map.setTextColor(colors.white)
   map.write(text)
 end
- 
-turtleError()
 
-for i=1, 27 do
-  newBlock(i,math.random(1,19), colors.red, curLayer)
-end
-redraw()
+redrawMap()
 repeat
   local event, key = os.pullEvent("key")
   if key == keys.up then
-  	curY = curY - 1
+        positions.curY = positions.curY - 1
   elseif key == keys.down then
-  	curY = curY + 1
+        positions.curY = positions.curY + 1
   elseif key == keys.right then
-  	curX = curX + 1
+        positions.curX = positions.curX + 1
   elseif key == keys.left then
-  	curX = curX - 1
+        positions.curX = positions.curX - 1
   elseif key == keys.w then
-  	curLayer = curLayer + 1
+        positions.curLayer = positions.curLayer + 1
   elseif key == keys.s then
-  	curLayer = curLayer - 1
+        positions.curLayer = positions.curLayer - 1
   end
-  redraw()
-until key == keys.one 
+  redrawMap()
+until key == keys.one
+fs.makeDir(".gladius/Drones")
+
+local save = fs.open(".gladius/Drones/"..turtleName,"w") -- Saves current position
+save.write(textutils.serialize(positions))
+save.close()
+local save = fs.open(".gladius/map","w") -- Saves map
+save.write(textutils.serialize(tMap))
+save.close()
